@@ -2,35 +2,30 @@
 CC      = gcc
 LIBS    = -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
 
-# Executável e diretórios
+# Executável e diretório para os arquivos .o
 TARGET  = main
 SRC_DIR = .
 OBJ_DIR = obj
-BIN_DIR = bin
 
 # Arquivos fonte e objetos
 SRCS    = $(SRC_DIR)/main.c $(SRC_DIR)/game_functions.c
 OBJS    = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
-OUTPUT  = $(BIN_DIR)/$(TARGET)
 
-# Default: arquivo executável do jogo na pasta /bin
-all: $(OUTPUT)
+# Default: Executável do jogo
+all: $(TARGET)
 
-# Fase de linkagem e geração do executável
-$(OUTPUT): $(OBJS) | $(BIN_DIR)
+# Fase de linkagem
+$(TARGET): $(OBJS)
 	$(CC) $^ -o $@ $(LIBS)
 
-# Compilação parcial dos arquivos fonte
+# Compilando os arquivos fonte .c em arquivos objetos .o
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c $(SRC_DIR)/game_functions.h | $(OBJ_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) -c $< -o $@
 
-# Cria os diretórios se já não existem
+# Cria diretório 'obj' se já não existe
 $(OBJ_DIR):
 	mkdir -p $(OBJ_DIR)
 
-$(BIN_DIR):
-	mkdir -p $(BIN_DIR)
-
 # Limpando os arquivos gerados
 clean:
-	rm -rf $(OBJ_DIR) $(BIN_DIR)
+	rm -rf $(OBJ_DIR) $(TARGET)
