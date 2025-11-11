@@ -1,35 +1,292 @@
-
-#include "raylib.h"
-#include "Biblio.h"
-#define SCREEN_WIDTH 1190
-#define SCREEN_HEIGHT 910
-#define FPS 60
-#define BMAN_WIDTH 45
-#define BMAN_HEIGHT 65
-#define VELOCIDADE 4
-#define KILL_POINTS 100
-#define SIDES 4
-#define BOOM 5
-#define X 15
-#define Y 11
-#define BLOCO 70
-#define N_BLOCOS 35
-#define N_MUROS 5
-#define N_INIMIGOS 2
-#define N_BOMBAS 3
-
-
-
+#include <raylib.h>
+#include <stdio.h>
+#include <string.h>
+#include "game_functions.h"
 
 //Funcoes de jogo:
-//Funcao Game Over
-void GameOver (int gameover)
+//Funcao proxima fase
+void LevelPassed (short *gameState, int *level)
 {
-    if (!gameover)
+    if (*gameState==2)
     {
         BeginDrawing();
-        DrawText("GAME OVER", SCREEN_WIDTH/2-MeasureText("GAME OVER", 100)/2, SCREEN_HEIGHT/2-50, 100, RAYWHITE);
+        DrawText("LEVEL PASSED!", SCREEN_WIDTH/2-MeasureText("LEVEL PASSED!", 100)/2, SCREEN_HEIGHT/2-50, 100, RAYWHITE);
+        DrawText ("PRESS ENTER TO CONTINUE", SCREEN_WIDTH/2-MeasureText("PRESS ENTER TO CONTINUE", 50)/2, SCREEN_HEIGHT/2+50, 50, RAYWHITE);
 
+        if (IsKeyPressed(KEY_ENTER))
+        {
+            *level+=1;
+            *gameState=3;
+        }
+    }
+}
+
+//Funcao recebe o nome inserido do usuario
+void GetName (char name[STR], int *namePos, short *gameState)
+{
+    int letter=0;
+
+    if (*gameState==4)
+    {
+        DrawText("ENTER YOUR NAME", SCREEN_WIDTH/2-MeasureText("ENTER YOUR NAME", 100)/2, SCREEN_HEIGHT/2-50, 100, RAYWHITE);
+        DrawText(TextFormat("%s", name), SCREEN_WIDTH/2-MeasureText("          ", 50)/2, SCREEN_HEIGHT/2+50, 50, RAYWHITE);
+        letter=GetCharPressed();
+
+        if (letter != 0)
+        {
+            name[*namePos]=(char)letter;
+            name[*namePos +1]='\0';
+            *namePos+=1;
+
+            letter=0;
+        }
+        if (IsKeyPressed(KEY_BACKSPACE) && namePos>0)
+        {
+            *namePos-=1;
+            name[*namePos]='\0';
+        }
+        if (IsKeyPressed(KEY_ENTER))
+            *gameState=5;
+    }
+}
+
+//Funcao abre o arquivo e escreve as informacoes
+void RankingFile (BOMBERMAN bomberman, double time, short *gameState, PLAYERFILE *player, PLAYERFILE ranking[RANKING])
+{
+    FILE *arqBin;
+    int i;
+    arqBin= fopen("assets/ranking.bin", "a+b");
+
+    if (*gameState==5)
+    {
+        strcpy(player->name, bomberman.name);
+        player->points=bomberman.points;
+        player->time=time;
+
+        if (!arqBin)
+            DrawText("FILE COULD NOT OPEN", 10, 10, 50, RAYWHITE);
+        else
+        {
+            fwrite(&player->name, sizeof(STR), 1, arqBin);
+            fwrite(&player->points, sizeof(float), 1, arqBin);
+            fwrite(&player->time, sizeof(double), 1, arqBin);
+            
+            rewind(arqBin);
+
+        }
+        for (i=0; i<RANKING; i++)
+        {
+            if (!feof(arqBin))
+            {
+                fread(&ranking[i].name, sizeof(STR), 1, arqBin);
+                fread(&ranking[i].points, sizeof(float), 1, arqBin);
+                fread(&ranking[i].time, sizeof(double), 1, arqBin);
+            }
+        }
+
+        if (IsKeyPressed(KEY_ENTER))
+            *gameState=6;
+    }
+
+    fclose(arqBin);
+}
+
+//Funcao se ordenacao do vetor com o ranking por bubble sort
+void BubbleSort (PLAYERFILE ranking[RANKING])
+{
+    int i, j;
+    PLAYERFILE aux={};
+    
+    for (i=0; i<RANKING-1; i++)
+    {
+        for (j=0; j<RANKING-1; j++)
+        {
+            if (ranking[j].points < ranking[j+1].points)
+            {
+                strcpy(aux.name, ranking[j].name);
+                aux.points=ranking[j].points;
+                aux.time=ranking[j].time;
+            
+                strcpy(ranking[j].name, ranking[j+1].name);
+                ranking[j].points=ranking[j+1].points;
+                ranking[j].time=ranking[j+1].time;
+            
+                strcpy(ranking[j+1].name, aux.name);
+                ranking[j+1].points=aux.points;
+                ranking[j+1].time=aux.time;
+            }
+        }
+    }
+}
+
+//Funcao escreve as informacoes do arquivo na tela
+void PrintFile (PLAYERFILE ranking[RANKING], BOMBERMAN *bman, short *gameState, int *level, double *time)
+{
+    int i, Posx=10;
+    
+    BubbleSort(ranking);
+    
+    if (*gameState==6)
+    {        
+        for (i=0; i<RANKING; i++)
+        {
+            DrawText(TextFormat("%s", ranking[i].name), 10, Posx, 50, RED);
+            DrawText(TextFormat("%.f", ranking[i].points), 300, Posx, 50, RED);
+            DrawText(TextFormat("%.f", ranking[i].time), 500, Posx, 50, RED);
+            
+            Posx+=50;
+        }
+        DrawText("PRESS SPACE TO CONTINUE", 10, Posx, 50, WHITE);
+        if(IsKeyPressed(KEY_SPACE))
+        {
+            *gameState=7;
+        }
+    }
+    if (*gameState==7)
+    {
+        DrawText("PRESS R TO RESTART", SCREEN_WIDTH/2-MeasureText("PRESS R TO RESTART", 50)/2, SCREEN_HEIGHT/2+50, 50, RAYWHITE);
+        Restart(gameState, level, time, bman);
+    }
+}
+
+//Funcao que cria a nova fase
+void GenLevel
+(short *game, int level, BOMBERMAN *bman, ENEMY enemies[], int *nEnemies, BOMB bombs[], int *nBombs, int *bombsLeft, WALL muros[], int *nWalls, DOOR *door, int array[X][Y])
+{
+    if (*game==3)
+    {
+        bman->rec.x=BLOCO+1;
+        bman->rec.y=BLOCO+1;
+
+        *nEnemies=IncrInt(level, 1, N_INIMIGOS);
+        *nBombs=IncrInt(level, 3, N_BOMBAS);
+        *bombsLeft=*nBombs;
+        *nWalls=IncrInt(level, 4, N_MUROS);
+
+        door->status=muro;
+
+        ResetArray(array);
+        GenDoor (door, array);
+        ResetWalls(muros);
+        RandWalls(muros, *nWalls, array);
+        ResetEnemies(enemies);
+        RandEnemy(enemies, *nEnemies, array);
+        ResetBombs (bombs, *nBombs);
+
+        *game=1;
+    }
+}
+
+//Funcao reinicia os muros do cenario
+void ResetWalls (WALL muros[N_MUROS])
+{
+    int i;
+    
+    for (i=0; i<N_MUROS; i++)
+    {
+        muros[i].status=0;
+    }
+}
+
+//Funcao reinicia os inimigos do jogo
+void ResetEnemies(ENEMY enemyList[N_INIMIGOS])
+{
+    int i;
+    
+    for (i=0; i<N_INIMIGOS; i++)
+    {
+        enemyList[i].status=morto;
+    }
+}
+
+//Funcao reseta a matriz de posicoes do jogo
+void ResetArray (int gameArray[X][Y])
+{
+    int i, j;
+
+    for (i=0; i<X; i++)
+    {
+        for (j=0; j<Y; j++)
+        {
+            gameArray[i][j]=0;
+        }
+    }
+    FillArray (gameArray);
+
+}
+
+//Funcao preenche as posicoes ocupadas da matriz do jogo
+void FillArray (int gameArray[X][Y])
+{
+    int i, j;
+
+    for (i=2; i<X; i+=2)
+    {
+        for (j=2; j<Y; j+=2)
+        {
+            gameArray[i][j]=1;
+        }
+    }
+    for (i=0; i<SIDES; i++)
+    {
+        for (j=0; j<SIDES; j++)
+        {
+            gameArray[i][j]=1;
+        }
+    }
+}
+
+//Funcao incrementa um inteiro com um limite
+int IncrInt (int i, int incr, int limit)
+{
+    if (i+incr < limit)
+        return i+incr;
+    else
+        return limit;
+}
+
+//Funcao Game Over
+void GameOver (short *gameState, int *level, double *time, BOMBERMAN *bomberman)
+{
+    if (*gameState==0)
+    {
+
+        DrawText("GAME OVER", SCREEN_WIDTH/2-MeasureText("GAME OVER", 100)/2, SCREEN_HEIGHT/2-50, 100, RAYWHITE);
+        DrawText ("PRESS C TO CONTINUE", SCREEN_WIDTH/2-MeasureText("PRESS C TO CONTINUE", 50)/2, SCREEN_HEIGHT/2+50, 50, RAYWHITE);
+
+        if (bomberman->lives==0)
+        {
+            if (IsKeyPressed (KEY_C))
+                *gameState=4;
+
+            Restart (gameState, level, time, bomberman);
+        }
+        else
+        {
+            ResetLevel (gameState);
+        }
+    }
+}
+
+//Funcao recomeca a fase atual do jogo
+void ResetLevel (short *gameState)
+{
+    if (IsKeyPressed(KEY_C))
+    {
+        *gameState=3;
+    }
+}
+
+//Funcao de recomeco do jogo
+void Restart (short *gameState, int *level, double *time, BOMBERMAN *bomberman)
+{
+    if (IsKeyPressed (KEY_R))
+    {
+        *level=1;
+        *time=0;
+        bomberman->lives=3;
+        bomberman->points=0.0f;
+        *gameState=3;
     }
 }
 
@@ -44,11 +301,14 @@ void Pause (int *pause)
     if (*pause==-1)
     {
         DrawText("PAUSED", SCREEN_WIDTH/2-MeasureText("PAUSED", 100)/2, SCREEN_HEIGHT/2-50, 100, RAYWHITE);
+        DrawText("arrows or wasd : move Bomberman", SCREEN_WIDTH/2-MeasureText("arrows or wasd : move Bomberman", 50)/2, SCREEN_HEIGHT/2+100, 50, RAYWHITE);
+        DrawText("space : drop bomb", SCREEN_WIDTH/2-MeasureText("space : drop bomb", 50)/2, SCREEN_HEIGHT/2+150, 50, RAYWHITE);
+        DrawText("enter : explode bombs", SCREEN_WIDTH/2-MeasureText("enter : explode bombs", 50)/2, SCREEN_HEIGHT/2+200, 50, RAYWHITE);
     }
 }
 
 //Imprime as informacoes do jogo na tela
-void GameInfo (BOMBERMAN bomberman, int bombs, double time)
+void GameInfo (BOMBERMAN bomberman, DOOR door, int level, int bombs, double time)
 {
     int min=(int)time/60;
     int sec=(int)time%60;
@@ -56,6 +316,12 @@ void GameInfo (BOMBERMAN bomberman, int bombs, double time)
     DrawText (TextFormat("BOMBS %d", bombs), SCREEN_WIDTH-MeasureText("BOMBS %d", 25), 45, 25, BLACK);
     DrawText (TextFormat("POINTS %.f", bomberman.points), 10, 10, 25, BLACK);
     DrawText (TextFormat("TIME %02d:%02d", min, sec), 10, 45, 25, BLACK);
+    DrawText (TextFormat("LEVEL %d", level), SCREEN_WIDTH/2 - MeasureText("LEVEL %d", 50)/2, 10, 50, BLACK);
+    
+    if (door.status==encontrada)
+    {
+        DrawText("DOOR LOCKED", SCREEN_WIDTH/2-MeasureText("PAUSED", 100)/2, SCREEN_HEIGHT-50, 50, BLACK);
+    }
 }
 
 //Funcao preenche o vetor de blocos
@@ -147,6 +413,8 @@ void GenDoor (DOOR *door, int gameArray[X][Y])
             door->rec.width=BLOCO;
             door->rec.height=BLOCO;
             positioned=1;
+
+            gameArray[rx][ry]=1;
         }
     }
 }
@@ -228,6 +496,22 @@ void BreakWalls (Rectangle explosions[BOOM], BOMBERMAN *bman, WALL muros[], int 
     }
 }
 
+//Funcao encontra a porta com as bombas
+void FindDoor (Rectangle explosions[SIDES], DOOR *door)
+{
+    int i=0, collision=0;
+    
+    while (i<BOOM && !collision)
+    {
+        if (CheckCollisionRecs(explosions[i], door->rec))
+        {
+            door->status=encontrada;
+        }
+        
+        i++;
+    }
+}
+
 //Funcao checa colisao com um vetor de inimigos
 short CheckCollisionEnemy (Rectangle bmanRect, ENEMY enemyList[], int len)
 {
@@ -250,21 +534,22 @@ short CheckCollisionEnemy (Rectangle bmanRect, ENEMY enemyList[], int len)
 //Funcao movimenta os inimigos:
 void MoveEnemy (ENEMY enemies[N_INIMIGOS], int len, BOMBERMAN bman, Rectangle blocos[N_BLOCOS], Rectangle sides[SIDES], WALL muros[N_MUROS], int lenW, DOOR door, float speed)
 {
+    short game;
     int i;
 
     for (i=0; i<len; i++)
     {
         if (enemies[i].rec.x < bman.rec.x)
-            MoveRight(&enemies[i].rec, blocos, sides[0], muros, lenW, door, speed);
+            MoveRight(&enemies[i].rec, blocos, sides[0], muros, lenW, door, &game, speed);
 
         if (enemies[i].rec.x > bman.rec.x)
-            MoveLeft(&enemies[i].rec, blocos, sides[1], muros, lenW, door, speed);
+            MoveLeft(&enemies[i].rec, blocos, sides[1], muros, lenW, door, &game, speed);
 
         if (enemies[i].rec.y > bman.rec.y)
-            MoveUp(&enemies[i].rec, blocos, sides[0], muros, lenW, door, speed);
+            MoveUp(&enemies[i].rec, blocos, sides[0], muros, lenW, door, &game, speed);
 
         if (enemies[i].rec.y < bman.rec.y)
-            MoveDown(&enemies[i].rec, blocos, sides[0], muros, lenW, door, speed);
+            MoveDown(&enemies[i].rec, blocos, sides[0], muros, lenW, door, &game, speed);
     }
 }
 
@@ -292,6 +577,17 @@ void KillEnemies (Rectangle explosions[BOOM], BOMBERMAN *bman, ENEMY enemies[], 
 }
 
 //Funcoes de bomba:
+//Funcao reseta o status da bomba para inata
+void ResetBombs (BOMB bombList[], int tam)
+{
+    int i;
+
+    for (i=0; i<tam; i++)
+    {
+        bombList[i].status=inata;
+    }
+}
+
 //Funcao larga a bomba
 void DropBomb (BOMB bombList[], int tam, BOMBERMAN bomberman, int *bombs)
 {
@@ -299,7 +595,7 @@ void DropBomb (BOMB bombList[], int tam, BOMBERMAN bomberman, int *bombs)
     short dropped=0;
 
     if (IsKeyPressed (KEY_SPACE))
-    {
+    {        
         while (i<tam && !dropped)
         {
 
@@ -333,7 +629,7 @@ short PositionBomb (BOMB *bomb, BOMBERMAN bomberman)
 }
 
 //Funcao explode as bombas ja posicionadas
-void ExplodeBombs (BOMB bombList[], int lenB, BOMBERMAN *bman, ENEMY enemies[], int lenE, WALL muros[], int lenW, short *gameover, float *timer)
+void ExplodeBombs (BOMB bombList[], int lenB, BOMBERMAN *bman, ENEMY enemies[], int lenE, WALL muros[], int lenW, DOOR *door, short *gameover, float *timer)
 {
     int i;
 
@@ -346,16 +642,16 @@ void ExplodeBombs (BOMB bombList[], int lenB, BOMBERMAN *bman, ENEMY enemies[], 
 
         for (i=0; i<lenB; i++)
         {
-            if (bombList[i].status==1)
+            if (bombList[i].status==ativa || bombList[i].status==explodindo)
             {
-                DetonateBomb(&bombList[i], bman, enemies, lenE, muros, lenW, gameover, timer);
+                DetonateBomb(&bombList[i], bman, enemies, lenE, muros, lenW, door, gameover, timer);
             }
         }
     }
 }
 
 //Funcao explode uma bomba individualmente
-void DetonateBomb (BOMB *bomb, BOMBERMAN *bman, ENEMY enemies[], int lenE, WALL muros[], int lenW, short *gameover, float *timer)
+void DetonateBomb (BOMB *bomb, BOMBERMAN *bman, ENEMY enemies[], int lenE, WALL muros[], int lenW, DOOR *door, short *gameover, float *timer)
 {
     Rectangle explosions[BOOM]=
     {{bomb->rec.x, bomb->rec.y, BLOCO, BLOCO},
@@ -364,14 +660,18 @@ void DetonateBomb (BOMB *bomb, BOMBERMAN *bman, ENEMY enemies[], int lenE, WALL 
      {bomb->rec.x, bomb->rec.y-BLOCO, BLOCO, BLOCO},
      {bomb->rec.x, bomb->rec.y+BLOCO, BLOCO, BLOCO}};
 
+    if (bomb->status==ativa)
+    {
+        KillEnemies (explosions, bman, enemies, lenE);
+        BreakWalls (explosions, bman, muros, lenW);
+        FindDoor(explosions, door);
+        ExplodeBomberman (bman, explosions, gameover);
+        bomb->status=explodindo;
+    }
 
-    KillEnemies (explosions, bman, enemies, lenE);
-    BreakWalls (explosions, bman, muros, lenW);
-    ExplodeBomberman (bman, explosions, gameover);
 
-
-    if (*timer<0.0f)
-        bomb->status=2;
+    if (*timer<=0)
+        bomb->status=detonada;
 
     DrawExplosions (explosions);
 }
@@ -384,7 +684,10 @@ void ExplodeBomberman (BOMBERMAN *bomberman, Rectangle explosions[BOOM], short *
     while (i<BOOM && *gameover==1)
     {
         if (CheckCollisionRecs(bomberman->rec, explosions[i]))
+        {
+            bomberman->lives-=1;
             *gameover=0;
+        }
 
         i++;
     }
@@ -399,29 +702,32 @@ short PlayerMovement (BOMBERMAN *bomberman, ENEMY enemyList[], int lenE, Rectang
     if (!CheckCollisionEnemy ((*bomberman).rec, enemyList, lenE))
     {
         if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D))
-            MoveRight (&(*bomberman).rec, blocos, sides[0], muros, lenW, door, VELOCIDADE);
+            MoveRight (&bomberman->rec, blocos, sides[0], muros, lenW, door, &game, VELOCIDADE);
 
         if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A))
-            MoveLeft (&(*bomberman).rec, blocos, sides[1], muros, lenW, door, VELOCIDADE);
+            MoveLeft (&bomberman->rec, blocos, sides[1], muros, lenW, door, &game, VELOCIDADE);
 
         if (IsKeyDown(KEY_UP) || IsKeyDown(KEY_W))
-            MoveUp (&(*bomberman).rec, blocos, sides[2], muros, lenW, door, VELOCIDADE);
+            MoveUp (&bomberman->rec, blocos, sides[2], muros, lenW, door, &game, VELOCIDADE);
 
         if (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S))
-            MoveDown (&(*bomberman).rec, blocos, sides[3], muros, lenW, door, VELOCIDADE);
+            MoveDown (&bomberman->rec, blocos, sides[3], muros, lenW, door, &game, VELOCIDADE);
     }
-        else
-            game=0;
+    else
+    {
+        bomberman->lives-=1;
+        game=0;
+    }
 
     return game;
 }
 
 //Funcao movimenta o bomberman para a direita
-void MoveRight (Rectangle *rec, Rectangle blocos[N_BLOCOS], Rectangle sideR, WALL muros[N_MUROS], int lenW, DOOR door, float velocidade)
+void MoveRight (Rectangle *rec, Rectangle blocos[N_BLOCOS], Rectangle sideR, WALL muros[N_MUROS], int lenW, DOOR door, short *game, float velocidade)
 {
     short collision=0;
     int i=0;
-    Rectangle recRight={(*rec).x+velocidade, (*rec).y, (*rec).width, (*rec).height};
+    Rectangle recRight={rec->x+velocidade, rec->y, rec->width, rec->height};
 
     while (i<N_BLOCOS && !collision)
     {
@@ -432,14 +738,14 @@ void MoveRight (Rectangle *rec, Rectangle blocos[N_BLOCOS], Rectangle sideR, WAL
     }
 
     CheckCollisionWalls (recRight, muros, lenW, &collision);
-    CheckCollisionDoor (recRight, door, &collision);
+    CheckCollisionDoor (recRight, door, &collision, game);
 
     if (!collision)
         (*rec).x += velocidade;
 }
 
 //Funcao movimenta o bomberman para a esquerda
-void MoveLeft (Rectangle *rec, Rectangle blocos[N_BLOCOS], Rectangle sideL, WALL muros[N_MUROS], int lenW, DOOR door, float velocidade)
+void MoveLeft (Rectangle *rec, Rectangle blocos[N_BLOCOS], Rectangle sideL, WALL muros[N_MUROS], int lenW, DOOR door, short *game, float velocidade)
 {
     short collision=0;
     int i=0;
@@ -454,7 +760,7 @@ void MoveLeft (Rectangle *rec, Rectangle blocos[N_BLOCOS], Rectangle sideL, WALL
     }
 
     CheckCollisionWalls (recLeft, muros, lenW, &collision);
-    CheckCollisionDoor (recLeft, door, &collision);
+    CheckCollisionDoor (recLeft, door, &collision, game);
 
     if (!collision)
         (*rec).x -= velocidade;
@@ -462,7 +768,7 @@ void MoveLeft (Rectangle *rec, Rectangle blocos[N_BLOCOS], Rectangle sideL, WALL
 }
 
 //Funcao movimenta o bomberman para cima
-void MoveUp (Rectangle *rec, Rectangle blocos[N_BLOCOS], Rectangle sideU, WALL muros[N_MUROS], int lenW, DOOR door, float velocidade)
+void MoveUp (Rectangle *rec, Rectangle blocos[N_BLOCOS], Rectangle sideU, WALL muros[N_MUROS], int lenW, DOOR door, short *game, float velocidade)
 {
     short collision=0;
     int i=0;
@@ -477,14 +783,14 @@ void MoveUp (Rectangle *rec, Rectangle blocos[N_BLOCOS], Rectangle sideU, WALL m
     }
 
     CheckCollisionWalls (recUp, muros, lenW, &collision);
-    CheckCollisionDoor (recUp, door, &collision);
+    CheckCollisionDoor (recUp, door, &collision, game);
 
     if (!collision)
         (*rec).y -= velocidade;
 }
 
 //Funcao movimenta o bomberman para baixo
-void MoveDown (Rectangle *rec, Rectangle blocos[N_BLOCOS], Rectangle sideD, WALL muros[N_MUROS], int lenW, DOOR door, float velocidade)
+void MoveDown (Rectangle *rec, Rectangle blocos[N_BLOCOS], Rectangle sideD, WALL muros[N_MUROS], int lenW, DOOR door, short *game, float velocidade)
 {
     short collision=0;
     int i=0;
@@ -499,7 +805,7 @@ void MoveDown (Rectangle *rec, Rectangle blocos[N_BLOCOS], Rectangle sideD, WALL
     }
 
     CheckCollisionWalls (recDown, muros, lenW, &collision);
-    CheckCollisionDoor (recDown, door, &collision);
+    CheckCollisionDoor (recDown, door, &collision, game);
 
     if (!collision)
         (*rec).y += velocidade;
@@ -523,12 +829,14 @@ void CheckCollisionWalls (Rectangle rec, WALL muros[N_MUROS], int len, short *co
 }
 
 //Funcao checa colisao com a porta
-void CheckCollisionDoor (Rectangle rec, DOOR door, short *collision)
+void CheckCollisionDoor (Rectangle rec, DOOR door, short *collision, short *game)
 {
     if (!*collision)
     {
-        if (CheckCollisionRecs(rec, door.rec))
+        if ((door.status==muro || door.status==encontrada) && CheckCollisionRecs(rec, door.rec))
             *collision=1;
+        else if (door.status==porta && CheckCollisionRecs(rec, door.rec))
+            *game=2;
     }
 }
 
@@ -633,7 +941,7 @@ void DrawDoor (DOOR door, Texture2D wallTex, Texture2D doorTex)
     {
         DrawTextureEx (wallTex, pos, 0, 0.44, WHITE);
     }
-    else if (door.status==porta)
+    else if (door.status==porta || door.status==encontrada)
     {
         DrawTextureEx (doorTex, pos, 0, 0.44, WHITE);
     }
