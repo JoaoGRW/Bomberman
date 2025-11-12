@@ -55,7 +55,7 @@ void RankingFile (BOMBERMAN bomberman, double time, short *gameState, PLAYERFILE
 {
     FILE *arqBin;
     int i;
-    arqBin= fopen("assets/ranking.bin", "a+b");
+    arqBin= fopen("../data/ranking.bin", "a+b");
 
     if (*gameState==5)
     {

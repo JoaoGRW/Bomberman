@@ -36,12 +36,12 @@ void GameLoop (BOMBERMAN *bomberman)
     GetFontDefault();
 
     //Texturas
-    bomberman_png=LoadTexture("assets/Bomberman.png");
-    bomb_active_png = LoadTexture ("assets/Bombactive.png");
-    bloco_png = LoadTexture ("assets/Block.png");
-    enemy_png = LoadTexture ("assets/enemy.png");
-    wall_png = LoadTexture ("assets/Wall.png");
-    door_png = LoadTexture ("assets/Door.png");
+    bomberman_png=LoadTexture("../assets/Bomberman.png");
+    bomb_active_png = LoadTexture ("../assets/Bombactive.png");
+    bloco_png = LoadTexture ("../assets/Block.png");
+    enemy_png = LoadTexture ("../assets/enemy.png");
+    wall_png = LoadTexture ("../assets/Wall.png");
+    door_png = LoadTexture ("../assets/Door.png");
 
     Vector2 bombermanpos={};
 
